@@ -59,7 +59,11 @@ async function getHiddenMessages() {
 
 const saveHiddenMessages = (ids: Set<string>) => set(KEY, ids);
 
-const hasMedia = (msg: Message) => msg.attachments.length > 0 || msg.embeds.length > 0 || msg.stickerItems.length > 0;
+const isEmoji = (url?: string) => url?.includes("/emojis/");
+const isMediaEmbed = (e: Message["embeds"][number]) => !isEmoji(e.url) && !isEmoji(e.thumbnail?.url) && !isEmoji(e.image?.url);
+const isMediaAtt = (a: Message["attachments"][number]) => !isEmoji(a.url) && !isEmoji(a.proxy_url);
+
+const hasMedia = (msg: Message) => msg.stickerItems.length > 0 || msg.attachments.some(isMediaAtt) || msg.embeds.some(isMediaEmbed);
 
 async function toggleHide(channelId: string, messageId: string) {
     const ids = await getHiddenMessages();
@@ -119,16 +123,14 @@ function HiddenMediaAccessory({ message }: { message: Message; }) {
 
     if (settings.store.peekView) {
         for (const att of message.attachments) {
-            if (att.content_type?.startsWith("image/") || att.filename.match(/\.(png|jpe?g|webp|gif|svg)$/i) || att.width) {
-                previews.push(att.proxy_url || att.url);
+            if (isMediaAtt(att) && (att.content_type?.startsWith("image/") || att.filename.match(/\.(png|jpe?g|webp|gif|svg)$/i) || att.width)) {
+                previews.push(att.url || att.proxy_url);
             }
         }
         for (const embed of message.embeds) {
-            if (embed.thumbnail?.url) {
-                previews.push(embed.thumbnail.proxyURL || embed.thumbnail.url);
-            } else if (embed.image?.url) {
-                previews.push(embed.image.proxyURL || embed.image.url);
-            }
+            if (!isMediaEmbed(embed)) continue;
+            const url = embed.image?.url || embed.image?.proxyURL || embed.thumbnail?.url || embed.thumbnail?.proxyURL;
+            if (url) previews.push(url);
         }
     }
 
